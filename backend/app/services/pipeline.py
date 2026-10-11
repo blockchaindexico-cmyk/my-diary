@@ -1,6 +1,6 @@
 """Background jobs: analyze an entry, then fold it into the user's life profile.
 
-Each job reads what it needs, closes its DB session, calls Claude, then writes in a fresh
+Each job reads what it needs, closes its DB session, calls the AI, then writes in a fresh
 session, so no database transaction stays open during a slow AI call.
 """
 

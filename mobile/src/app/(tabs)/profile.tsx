@@ -270,6 +270,8 @@ function PersonRow({ person, first }: { person: Person; first: boolean }) {
 function Settings() {
   const t = useTheme();
   const { user, serverUrl, signOut } = useAuth();
+  const ai = useQuery({ queryKey: ['ai-settings'], queryFn: api.aiSettings });
+  const aiProvider = ai.data?.providers.find((p) => p.id === ai.data?.provider);
   const remove = useMutation({ mutationFn: api.deleteAccount, onSuccess: () => signOut() });
 
   function confirmDelete() {
@@ -286,6 +288,24 @@ function Settings() {
 
   return (
     <>
+      <SectionHeader title="AI" />
+      <Card padded={false} onPress={() => router.push('/ai-settings')}>
+        <View style={styles.settingRow}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text variant="body">AI model</Text>
+            <Text variant="footnote" tone="secondary" numberOfLines={1}>
+              {ai.data ? `${aiProvider?.label ?? ai.data.provider} · ${ai.data.model || 'no model chosen'}` : ' '}
+            </Text>
+          </View>
+          {ai.data && !ai.data.ready && (
+            <Text variant="footnote" weight="600" style={{ color: t.warning }}>
+              Set up
+            </Text>
+          )}
+          <Icon name={{ ios: 'chevron.right', android: 'chevron_right' }} size={13} color={t.textTertiary} weight="semibold" />
+        </View>
+      </Card>
+
       <SectionHeader title="Account" />
       <Card padded={false}>
         <View style={styles.settingRow}>
@@ -333,5 +353,5 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   person: { flexDirection: 'row', gap: Spacing.md, padding: Spacing.lg, alignItems: 'flex-start' },
   avatar: { width: 36, height: 36, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  settingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.lg, paddingHorizontal: Spacing.lg, paddingVertical: 13 },
+  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.lg, paddingHorizontal: Spacing.lg, paddingVertical: 13 },
 });

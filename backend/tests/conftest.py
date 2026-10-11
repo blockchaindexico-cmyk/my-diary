@@ -30,7 +30,7 @@ class FakeAI(JournalAI):
     """Deterministic stand-in for Claude: 'great' days score high, everything else low."""
 
     def __init__(self):
-        super().__init__(api_key="", model="fake")
+        super().__init__(llm=None)
         self.calls: dict[str, list[dict]] = {"analyze": [], "profile": [], "insight": [], "chat": []}
         self.fail_analysis = False
 

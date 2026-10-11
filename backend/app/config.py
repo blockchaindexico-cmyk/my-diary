@@ -6,9 +6,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Which AI to use. These are defaults: the server owner can change them in the app
+    # (You → AI model), which takes precedence. See services/llm/providers.py for the options.
+    ai_provider: str = "gemini"  # gemini | openrouter | groq | ollama | openai | anthropic | custom
+    ai_model: str = ""  # blank = the provider's default
+    ai_base_url: str = ""  # only for ollama on another machine, or custom
+
+    gemini_api_key: str = ""
+    openrouter_api_key: str = ""
+    groq_api_key: str = ""
+    openai_api_key: str = ""
     anthropic_api_key: str = ""
-    claude_model: str = "claude-opus-5-5"
-    claude_effort: str = "medium"  # low | medium | high | xhigh | max
+    custom_ai_api_key: str = ""
+    claude_effort: str = "medium"  # Claude only: low | medium | high | xhigh | max
 
     # Signs login tokens. If unset, a random secret is generated once and kept in .jwt_secret
     jwt_secret: str = ""
@@ -16,9 +26,9 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./diary.db"
 
-    transcription_provider: str = "local"  # "local" | "openai"
+    transcription_provider: str = "local"  # local | groq | openai
     whisper_model_size: str = "small"
-    openai_api_key: str = ""
+    groq_transcribe_model: str = "whisper-large-v3-turbo"
     openai_transcribe_model: str = "gpt-4o-transcribe"
 
     allow_signups: bool = True

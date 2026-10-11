@@ -127,3 +127,42 @@ export type PeriodInsight = {
 export type InsightResponse = { status: 'empty' | 'ready'; insight: PeriodInsight | null; created_at?: string };
 
 export type ChatMessage = { id: number; role: 'user' | 'assistant'; content: string; created_at: string };
+
+export type AIProviderInfo = {
+  id: string;
+  label: string;
+  pricing: string;
+  note: string;
+  needs_key: boolean;
+  key_url: string;
+  key_hint: string | null; // e.g. "••••1234"; the key itself never leaves the server
+  key_source: 'app' | 'env' | null;
+  model: string;
+  default_model: string;
+  base_url: string;
+  default_base_url: string;
+  editable_base_url: boolean;
+};
+
+export type AISettings = {
+  provider: string;
+  model: string;
+  ready: boolean;
+  problem: string | null; // what's missing, when not ready
+  can_edit: boolean;
+  providers: AIProviderInfo[];
+  transcription_provider: string;
+  transcription_options: { id: string; label: string }[];
+};
+
+export type AIModel = { id: string; name: string; free: boolean | null; context_length: number | null };
+
+export type AITestResult = {
+  ok: boolean;
+  provider: string;
+  model: string;
+  seconds?: number;
+  json_mode?: string;
+  reply?: string;
+  error?: string;
+};

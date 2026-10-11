@@ -32,7 +32,7 @@ class Entry(SQLModel, table=True):
     duration_seconds: int | None = None
     status: str = "processing"  # "processing" | "ready" | "failed"
     error: str | None = None
-    # EntryAnalysis produced by Claude (see services/ai.py)
+    # EntryAnalysis produced by the AI (see services/ai.py)
     analysis: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     analyzed_at: datetime | None = None
 
@@ -66,3 +66,16 @@ class Insight(SQLModel, table=True):
     fingerprint: str
     data: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class AIConfig(SQLModel, table=True):
+    """AI choices made in the app. Overrides the .env defaults; one row for the whole server."""
+
+    id: int = Field(default=1, primary_key=True)
+    provider: str | None = None
+    # Per-provider choices, so switching back and forth keeps each provider's model and key
+    models: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    api_keys: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    base_urls: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    transcription_provider: str | None = None
+    updated_at: datetime = Field(default_factory=utcnow)

@@ -6,6 +6,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { BarList, DivergingBars } from '@/components/charts/Bars';
 import { LineChart, Sparkline } from '@/components/charts/LineChart';
 import { Ring } from '@/components/charts/Ring';
+import { FixAIButton } from '@/components/FixAIButton';
 import { SupportCard } from '@/components/SupportCard';
 import { Button } from '@/components/ui/Button';
 import { Card, SectionHeader } from '@/components/ui/Card';
@@ -272,6 +273,7 @@ function AiReflection({ days, end }: { days: number; end: string }) {
             <Text variant="subheadline" tone="secondary">
               {insight.error.message}
             </Text>
+            <FixAIButton error={insight.error.message} />
             <Button small kind="secondary" title="Try again" onPress={() => insight.refetch()} />
           </View>
         ) : insight.data?.insight ? (

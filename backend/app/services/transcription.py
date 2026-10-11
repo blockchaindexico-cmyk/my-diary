@@ -1,12 +1,17 @@
-"""Speech-to-text for voice entries. Claude reads text, so audio is transcribed first."""
+"""Speech-to-text for voice entries. The AI reads text, so audio is transcribed first."""
 
 import threading
 from functools import lru_cache
-from typing import Protocol
+from typing import Annotated, Protocol
 
 import httpx
+from fastapi import Depends
+from sqlmodel import Session
 
 from ..config import get_settings
+from ..db import get_session
+from .ai_config import get_row, resolve, resolve_key
+from .llm.providers import PROVIDERS
 
 
 class TranscriptionError(Exception):
@@ -33,7 +38,7 @@ class LocalWhisperTranscriber:
                 except ImportError as e:
                     raise TranscriptionError(
                         "faster-whisper isn't installed. Run `pip install faster-whisper` "
-                        "or set TRANSCRIPTION_PROVIDER=openai."
+                        "or choose Groq for speech-to-text in You → AI model."
                     ) from e
                 # Downloads the model on first use (~500MB for "small")
                 self._model = WhisperModel(self.model_size, device="auto", compute_type="int8")
@@ -48,35 +53,49 @@ class LocalWhisperTranscriber:
             raise TranscriptionError(f"Couldn't transcribe the recording: {e}") from e
 
 
-class OpenAITranscriber:
-    URL = "https://api.openai.com/v1/audio/transcriptions"
+class APITranscriber:
+    """Any OpenAI-compatible transcription endpoint: Groq's free Whisper, or OpenAI."""
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, *, label: str, base_url: str, api_key: str, model: str):
+        self.label = label
+        self.url = base_url.rstrip("/") + "/audio/transcriptions"
         self.api_key = api_key
         self.model = model
 
     def transcribe(self, path: str, filename: str) -> str:
         if not self.api_key:
-            raise TranscriptionError("OPENAI_API_KEY is not set on the server.")
+            raise TranscriptionError(f"Add your {self.label} API key in You → AI model to transcribe with {self.label}.")
         try:
             with open(path, "rb") as audio:
                 response = httpx.post(
-                    self.URL,
+                    self.url,
                     headers={"Authorization": f"Bearer {self.api_key}"},
                     data={"model": self.model, "response_format": "json"},
                     files={"file": (filename, audio)},
                     timeout=300,
                 )
         except httpx.HTTPError as e:
-            raise TranscriptionError("Couldn't reach the transcription service.") from e
+            raise TranscriptionError(f"Couldn't reach {self.label} to transcribe.") from e
+        if response.status_code == 429:
+            raise TranscriptionError(f"{self.label}'s free transcription limit was reached. Try again later.")
         if response.status_code != 200:
-            raise TranscriptionError(f"Transcription failed ({response.status_code}): {response.text[:200]}")
+            raise TranscriptionError(f"{self.label} transcription failed ({response.status_code}): {response.text[:200]}")
         return response.json().get("text", "").strip()
 
 
 @lru_cache
-def get_transcriber() -> Transcriber:
+def _local(model_size: str) -> LocalWhisperTranscriber:
+    # One instance per model size, so the Whisper model loads once
+    return LocalWhisperTranscriber(model_size)
+
+
+def get_transcriber(session: Annotated[Session, Depends(get_session)]) -> Transcriber:
     settings = get_settings()
-    if settings.transcription_provider == "openai":
-        return OpenAITranscriber(settings.openai_api_key, settings.openai_transcribe_model)
-    return LocalWhisperTranscriber(settings.whisper_model_size)
+    choice = resolve(session).transcription_provider
+    row = get_row(session)
+    if choice in ("groq", "openai"):
+        provider = PROVIDERS[choice]
+        key, _ = resolve_key(provider, row)
+        model = settings.groq_transcribe_model if choice == "groq" else settings.openai_transcribe_model
+        return APITranscriber(label=provider.label, base_url=provider.base_url, api_key=key, model=model)
+    return _local(settings.whisper_model_size)

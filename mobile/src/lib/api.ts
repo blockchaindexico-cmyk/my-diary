@@ -1,6 +1,9 @@
 import { Platform } from 'react-native';
 
 import type {
+  AIModel,
+  AISettings,
+  AITestResult,
   ChatMessage,
   Entry,
   InsightResponse,
@@ -116,4 +119,16 @@ export const api = {
   sendChat: (message: string, today: string) =>
     request<{ user_message: ChatMessage; reply: ChatMessage }>('/chat', { method: 'POST', json: { message, today } }),
   clearChat: () => request<void>('/chat/messages', { method: 'DELETE' }),
+
+  aiSettings: () => request<AISettings>('/ai/settings'),
+  updateAISettings: (body: {
+    provider?: string;
+    model?: string;
+    api_key?: string;
+    base_url?: string;
+    transcription_provider?: string;
+  }) => request<AISettings>('/ai/settings', { method: 'PUT', json: body }),
+  aiModels: (body: { provider: string; api_key?: string; base_url?: string }) =>
+    request<{ models: AIModel[] }>('/ai/models', { method: 'POST', json: body }),
+  testAI: () => request<AITestResult>('/ai/test', { method: 'POST' }),
 };

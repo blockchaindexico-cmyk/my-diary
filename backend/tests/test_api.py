@@ -157,16 +157,3 @@ def test_delete_account(client, auth):
     client.post("/chat", json={"message": "hi"}, headers=auth)
     assert client.delete("/auth/me", headers=auth).status_code == 204
     assert client.get("/auth/me", headers=auth).status_code == 401
-
-
-def test_missing_api_key_is_a_clear_error(monkeypatch):
-    import pytest
-
-    from app.services.ai import AIError, JournalAI
-
-    for var in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("HOME", "/nonexistent")  # no `ant auth login` profile either
-    ai = JournalAI(api_key="", model="claude-opus-5-5")
-    with pytest.raises(AIError, match="ANTHROPIC_API_KEY"):
-        ai.chat(memory="m", history=[], message="hi", retrieved=None)

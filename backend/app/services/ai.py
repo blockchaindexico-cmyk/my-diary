@@ -1,28 +1,21 @@
-"""All Claude calls: analyzing entries, maintaining the life profile, period insights, and chat."""
+"""The journal's AI features: analyzing entries, the life profile, period insights and chat.
 
-import logging
+The prompts live here; which model runs them is decided by services/ai_config.py.
+"""
+
 from datetime import date
-from functools import lru_cache
-from typing import Any, TypeVar
+from typing import Annotated, Any
 
-import anthropic
-import pydantic
-from pydantic import BaseModel
+from fastapi import Depends
+from pydantic import BaseModel, Field
+from sqlmodel import Session
 
-from ..config import get_settings
+from ..db import get_session
+from .ai_config import build_llm, resolve
 from .ai_schemas import EntryAnalysis, LifeProfile, PeriodInsight
+from .llm.base import LLM, AIError
 
-log = logging.getLogger(__name__)
-
-T = TypeVar("T", bound=BaseModel)
-
-# Server-side fallback: if a safety classifier declines a request (e.g. a false positive on a
-# heavy mental-health entry), the API retries it on Anthropic's recommended fallback model.
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
-
-
-class AIError(Exception):
-    """A user-presentable failure from the AI layer."""
+__all__ = ["AIError", "JournalAI", "get_ai"]
 
 
 ANALYSIS_SYSTEM = """\
@@ -77,66 +70,18 @@ respond with care, encourage them to contact local emergency services or a crisi
 (findahelpline.com lists lines for every country), and keep talking with them."""
 
 
+class Ping(BaseModel):
+    greeting: str = Field(description="A short, friendly hello (at most 8 words)")
+    number: int = Field(description="Any whole number from 1 to 10")
+
+
 class JournalAI:
-    def __init__(self, api_key: str, model: str, effort: str = "medium"):
-        self._api_key = api_key
-        self.model = model
-        self.effort = effort
-        self._client: anthropic.Anthropic | None = None
+    def __init__(self, llm: LLM | None):
+        self.llm = llm
 
     @property
-    def client(self) -> anthropic.Anthropic:
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self._api_key or None)
-        return self._client
-
-    # ---- low-level -------------------------------------------------------------------------
-
-    def _call(self, method: str, **kwargs):
-        try:
-            fn = getattr(self.client.beta.messages, method)
-            response = fn(
-                model=self.model,
-                max_tokens=16000,
-                output_config={"effort": self.effort},
-                betas=[FALLBACK_BETA],
-                fallbacks="default",
-                **kwargs,
-            )
-        except anthropic.AuthenticationError as e:
-            raise AIError("The server's ANTHROPIC_API_KEY is missing or invalid.") from e
-        except anthropic.RateLimitError as e:
-            raise AIError("The AI is busy right now. Please try again in a minute.") from e
-        except anthropic.APIStatusError as e:
-            log.warning("Claude API error %s: %s", e.status_code, e.message)
-            raise AIError("The AI service returned an error. Please try again.") from e
-        except anthropic.APIConnectionError as e:
-            raise AIError("Couldn't reach the AI service. Check the server's internet connection.") from e
-        except anthropic.AnthropicError as e:
-            raise AIError(f"AI is not configured on the server: {e}") from e
-        except TypeError as e:
-            # The SDK raises this at request time when no API key or other credentials exist
-            if "authentication method" not in str(e):
-                raise
-            raise AIError("Claude isn't set up on the server yet: add ANTHROPIC_API_KEY to backend/.env.") from e
-
-        if response.stop_reason == "refusal":
-            raise AIError("The AI declined to respond to this. Try rephrasing it.")
-        if response.stop_reason == "max_tokens":
-            raise AIError("The AI response was cut off. Please try again.")
-        return response
-
-    def _parse(self, output_format: type[T], **kwargs) -> T:
-        try:
-            response = self._call("parse", output_format=output_format, **kwargs)
-        except pydantic.ValidationError as e:
-            raise AIError("The AI returned an unexpected format. Please try again.") from e
-        parsed = response.parsed_output
-        if parsed is None:
-            raise AIError("The AI returned an empty response. Please try again.")
-        return parsed
-
-    # ---- features --------------------------------------------------------------------------
+    def model(self) -> str:
+        return self.llm.model if self.llm else ""
 
     def analyze_entry(
         self,
@@ -155,15 +100,10 @@ class JournalAI:
             f"Their existing activity labels: {', '.join(known_activities) or '(none yet)'}\n"
             f"What we know about them so far: {profile_context}"
         )
-        analysis = self._parse(
-            EntryAnalysis,
+        analysis = self.llm.generate(
             system=ANALYSIS_SYSTEM,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"<context>\n{context}\n</context>\n\n<entry>\n{text}\n</entry>",
-                }
-            ],
+            prompt=f"<context>\n{context}\n</context>\n\n<entry>\n{text}\n</entry>",
+            output=EntryAnalysis,
         )
         return _clamp_scores(analysis)
 
@@ -176,22 +116,22 @@ class JournalAI:
         digest: str,
         latest_entries: str,
     ) -> LifeProfile:
-        content = (
+        prompt = (
             f"Today is {today.strftime('%A, %d %B %Y')}. The user's name is {user_name}.\n\n"
             f"<previous_profile>\n{previous_profile}\n</previous_profile>\n\n"
             f"<journal_digest>\nOne line per entry, oldest first. Scores are 1-10.\n{digest}\n</journal_digest>\n\n"
             f"<latest_entries>\n{latest_entries}\n</latest_entries>\n\n"
             "Write the updated profile."
         )
-        return self._parse(LifeProfile, system=PROFILE_SYSTEM, messages=[{"role": "user", "content": content}])
+        return self.llm.generate(system=PROFILE_SYSTEM, prompt=prompt, output=LifeProfile)
 
     def period_insight(self, *, user_name: str, period: str, stats: str, digest: str) -> PeriodInsight:
-        content = (
+        prompt = (
             f"The user's name is {user_name}. The period is {period}.\n\n"
             f"<stats>\n{stats}\n</stats>\n\n"
             f"<entries>\n{digest}\n</entries>"
         )
-        return self._parse(PeriodInsight, system=INSIGHT_SYSTEM, messages=[{"role": "user", "content": content}])
+        return self.llm.generate(system=INSIGHT_SYSTEM, prompt=prompt, output=PeriodInsight)
 
     def chat(
         self,
@@ -201,30 +141,17 @@ class JournalAI:
         message: str,
         retrieved: str | None,
     ) -> str:
-        user_content: list[dict[str, Any]] = []
         if retrieved:
-            user_content.append(
-                {
-                    "type": "text",
-                    "text": "<related_journal_entries>\nOlder entries that may relate to this message:\n"
-                    f"{retrieved}\n</related_journal_entries>",
-                }
+            message = (
+                "<related_journal_entries>\nOlder entries that may relate to this message:\n"
+                f"{retrieved}\n</related_journal_entries>\n\n{message}"
             )
-        user_content.append({"type": "text", "text": message})
+        return self.llm.chat(system=CHAT_SYSTEM, memory=memory, history=history, message=message)
 
-        response = self._call(
-            "create",
-            system=[
-                {"type": "text", "text": CHAT_SYSTEM},
-                # The memory block is stable within a conversation, so cache it.
-                {"type": "text", "text": memory, "cache_control": {"type": "ephemeral"}},
-            ],
-            messages=[*history, {"role": "user", "content": user_content}],
+    def ping(self) -> Ping:
+        return self.llm.generate(
+            system="You are checking that a connection works.", prompt="Say hello and pick a number.", output=Ping
         )
-        reply = "".join(block.text for block in response.content if block.type == "text").strip()
-        if not reply:
-            raise AIError("The AI returned an empty reply. Please try again.")
-        return reply
 
 
 def _clamp(value: int | float | None, low: float = 1, high: float = 10) -> int | None:
@@ -245,7 +172,6 @@ def _clamp_scores(analysis: EntryAnalysis) -> EntryAnalysis:
     return analysis
 
 
-@lru_cache
-def get_ai() -> JournalAI:
-    settings = get_settings()
-    return JournalAI(api_key=settings.anthropic_api_key, model=settings.claude_model, effort=settings.claude_effort)
+def get_ai(session: Annotated[Session, Depends(get_session)]) -> JournalAI:
+    """The AI for this request, using whatever provider and model are currently selected."""
+    return JournalAI(build_llm(resolve(session)))

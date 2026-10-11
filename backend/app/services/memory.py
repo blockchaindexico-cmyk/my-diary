@@ -1,4 +1,4 @@
-"""Turns stored entries into compact text Claude can use as memory."""
+"""Turns stored entries into compact text the AI can use as memory."""
 
 import json
 import re

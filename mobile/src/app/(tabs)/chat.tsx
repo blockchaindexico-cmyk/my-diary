@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FixAIButton } from '@/components/FixAIButton';
 import { Orb } from '@/components/Orb';
 import { haptic, IconButton } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -143,9 +144,12 @@ export default function Chat() {
       )}
 
       {send.isError && (
-        <Text variant="footnote" tone="destructive" align="center" style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs }}>
-          {send.error.message}
-        </Text>
+        <View style={styles.sendError}>
+          <Text variant="footnote" tone="destructive" align="center">
+            {send.error.message}
+          </Text>
+          <FixAIButton error={send.error.message} />
+        </View>
       )}
 
       <View
@@ -262,6 +266,7 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '82%', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9 },
   typing: { flexDirection: 'row', gap: 5, paddingVertical: 14 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  sendError: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs, gap: Spacing.sm, alignItems: 'center' },
   inputBar: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, width: '100%', maxWidth: MaxContentWidth + Spacing.lg * 2, alignSelf: 'center' },
   inputWrap: {
     flexDirection: 'row',

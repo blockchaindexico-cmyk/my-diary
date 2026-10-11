@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Meter } from '@/components/charts/Meter';
 import { DayStrip } from '@/components/DayStrip';
+import { FixAIButton } from '@/components/FixAIButton';
 import { MoodBadge } from '@/components/EntryCard';
 import { SupportCard } from '@/components/SupportCard';
 import { Button, haptic } from '@/components/ui/Button';
@@ -111,6 +112,7 @@ export default function EntryDetail() {
                   <Text variant="subheadline" tone="secondary">
                     {entry.error}
                   </Text>
+                  <FixAIButton error={entry.error} />
                   <Button small title="Try again" onPress={() => retry.mutate()} loading={retry.isPending} />
                 </Card>
               )}

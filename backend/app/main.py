@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .db import init_db
-from .routers import analytics, auth, chat, entries, profile
+from .routers import ai_settings, analytics, auth, chat, entries, profile
 
 logging.basicConfig(level=logging.INFO)
 
@@ -26,14 +26,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for router in (auth.router, entries.router, analytics.router, profile.router, chat.router):
+for router in (auth.router, entries.router, analytics.router, profile.router, chat.router, ai_settings.router):
     app.include_router(router)
 
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "model": settings.claude_model,
-        "transcription_provider": settings.transcription_provider,
-    }
+    return {"status": "ok"}

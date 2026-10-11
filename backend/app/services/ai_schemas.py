@@ -1,4 +1,4 @@
-"""Structured outputs Claude produces. Field descriptions double as instructions to the model."""
+"""Structured output the AI produces. Field descriptions double as instructions to the model."""
 
 from typing import Literal
 

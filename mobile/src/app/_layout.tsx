@@ -36,6 +36,7 @@ function RootNavigator() {
       <Stack.Protected guard={status === 'signedIn'}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="entry/[id]" options={{ headerShown: true, title: '', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="ai-settings" options={{ headerShown: true, title: 'AI model', headerBackTitle: 'You' }} />
       </Stack.Protected>
       <Stack.Protected guard={status === 'signedOut'}>
         <Stack.Screen name="sign-in" />
